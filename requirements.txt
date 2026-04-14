@@ -1,0 +1,22 @@
+# AuditIQ Backend — Python dependencies
+# Install with: pip install -r requirements.txt
+
+# Web framework
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+
+# Data validation
+pydantic==2.10.3
+pydantic-settings==2.6.1
+
+# Database — Supabase
+supabase==2.10.0
+
+# HTTP client — must stay <0.28 to satisfy supabase 2.10.0's constraint
+httpx>=0.26,<0.28
+
+# File handling
+python-multipart==0.0.18
+
+# Environment
+python-dotenv==1.0.1
