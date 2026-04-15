@@ -18,6 +18,17 @@ from ..models.schemas import AuditType
 logger = logging.getLogger(__name__)
 
 
+def _public_api_origin(settings: Any) -> str:
+    """
+    Origin only (scheme + host + optional port). Strips trailing /api so callback paths
+    are not doubled when someone sets API_BASE_URL=https://host.com/api by mistake.
+    """
+    b = (getattr(settings, "API_BASE_URL", None) or "").strip().rstrip("/")
+    while b.lower().endswith("/api"):
+        b = b[:-4].rstrip("/")
+    return b or "http://localhost:8000"
+
+
 def _json_safe(value: Any) -> Any:
     """Round-trip through JSON so httpx can serialize floats, dates, etc."""
     return json.loads(json.dumps(value, default=str))
@@ -109,8 +120,7 @@ def _build_payload(
     }
     """
     settings = get_settings()
-    # Derive the callback URL from our own base URL, configured in env
-    base_url = getattr(settings, "API_BASE_URL", "http://localhost:8000")
+    base_url = _public_api_origin(settings)
 
     return {
         "session_id": str(session_id),
@@ -154,7 +164,7 @@ async def trigger_document_upload(document_row: dict[str, Any]) -> None:
         )
         return
 
-    base_url = getattr(settings, "API_BASE_URL", "http://localhost:8000").rstrip("/")
+    base_url = _public_api_origin(settings)
     txn = (document_row.get("transaction_date") or "").strip() or date.today().isoformat()
     # Use next calendar day for end_date so it satisfies INOUT "end after start" if workflow validates
     try:
