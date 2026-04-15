@@ -125,7 +125,7 @@ def _build_payload(
     return {
         "session_id": str(session_id),
         "audit_type": audit_type.value,
-        "callback_url": f"{base_url}/api/webhook/n8n-result",
+        "callback_url": f"https://auditiq-back.vercel.app/api/webhook/n8n-result",
         "params": session_params,
         "documents": [
             {
