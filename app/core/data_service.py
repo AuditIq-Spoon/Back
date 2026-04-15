@@ -124,7 +124,13 @@ async def list_tenders() -> list[dict]:
     resp = await asyncio.to_thread(
         lambda: sb.table("tenders").select("*").order("created_at", desc=True).execute()
     )
-    return resp.data or []
+    rows = resp.data or []
+    if not rows:
+        # Supabase project often has no seed rows yet; keep UI usable.
+        logger.info("tenders table is empty — returning built-in fixture tenders")
+        from . import mock_db
+        return mock_db.list_tenders()
+    return rows
 
 
 async def get_tender(tender_id: str) -> dict | None:
@@ -133,9 +139,13 @@ async def get_tender(tender_id: str) -> dict | None:
         return mock_db.get_tender(tender_id)
     sb = _sb()
     resp = await asyncio.to_thread(
-        lambda: sb.table("tenders").select("*").eq("id", tender_id).single().execute()
+        lambda: sb.table("tenders").select("*").eq("id", tender_id).maybe_single().execute()
     )
-    return resp.data
+    row = resp.data
+    if isinstance(row, dict) and row.get("id"):
+        return row
+    from . import mock_db
+    return mock_db.get_tender(tender_id)
 
 
 # ---------------------------------------------------------------------------

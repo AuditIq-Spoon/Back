@@ -19,4 +19,8 @@ def get_supabase() -> Client:
     so the FastAPI event loop is never blocked.
     """
     settings = get_settings()
+    if settings.use_mock_db:
+        raise RuntimeError(
+            "get_supabase() must not be called when use_mock_db is True — use data_service / mock_db."
+        )
     return create_client(settings.SUPABASE_URL, settings.SUPABASE_KEY)

@@ -54,7 +54,7 @@ class TenderStatus(str, Enum):
 class TenderWinner(BaseModel):
     company: str
     amount: float
-    awarded_at: str  # ISO datetime string
+    awarded_at: Optional[str] = None  # optional — DB / legacy rows may omit it
 
 
 class Tender(BaseModel):
@@ -62,13 +62,53 @@ class Tender(BaseModel):
     id: str
     reference: str
     name: str
-    description: str
-    budget: float
+    description: str = ""
+    budget: float = 0.0
     currency: str = "MAD"
     status: TenderStatus
     deadline: Optional[str] = None
     winner: Optional[TenderWinner] = None
     created_at: str
+
+    @field_validator("budget", mode="before")
+    @classmethod
+    def _budget_none_as_zero(cls, v: Any) -> float:
+        if v is None:
+            return 0.0
+        return float(v)
+
+    @field_validator("winner", mode="before")
+    @classmethod
+    def _winner_skip_empty(cls, v: Any) -> Any:
+        if not v or not isinstance(v, dict):
+            return v
+        if not str(v.get("company") or "").strip():
+            return None
+        return v
+
+    @field_validator("description", mode="before")
+    @classmethod
+    def _description_none_as_empty(cls, v: Any) -> str:
+        return (v or "") if v is not None else ""
+
+    @field_validator("deadline", mode="before")
+    @classmethod
+    def _deadline_to_str(cls, v: Any) -> str | None:
+        if v is None:
+            return None
+        if hasattr(v, "isoformat"):
+            return v.isoformat().split("T")[0]
+        s = str(v)
+        return s.split("T")[0] if "T" in s else s
+
+    @field_validator("created_at", mode="before")
+    @classmethod
+    def _created_at_to_str(cls, v: Any) -> str:
+        if v is None:
+            return ""
+        if hasattr(v, "isoformat"):
+            return v.isoformat()
+        return str(v)
 
 
 # ---------------------------------------------------------------------------

@@ -1,0 +1,4 @@
+# Netlify defaults to a very new Python (e.g. 3.14) when unset. pydantic-core then
+# builds from source and requires Rust. Pin 3.12 so binary wheels install cleanly.
+[build.environment]
+  PYTHON_VERSION = "3.12"

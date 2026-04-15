@@ -2,8 +2,16 @@
 Application configuration loaded from environment variables.
 Uses pydantic-settings for type-safe env parsing.
 """
-from pydantic_settings import BaseSettings
+import re
 from functools import lru_cache
+
+from pydantic_settings import BaseSettings
+
+# supabase-py only accepts legacy JWT-style keys (anon / service_role), not newer
+# publishable keys (sb_publishable_…). See: create_client() key validation.
+_SUPABASE_PY_KEY_PATTERN = re.compile(
+    r"^[A-Za-z0-9-_=]+\.[A-Za-z0-9-_=]+\.?[A-Za-z0-9-_.+/=]*$"
+)
 
 
 class Settings(BaseSettings):
@@ -31,10 +39,28 @@ class Settings(BaseSettings):
     N8N_UPLOAD_WORKFLOW_ID: str = "yhs1QhteOspEbuDN"
     N8N_WEBHOOK_DOCUMENT_UPLOAD_URL: str = ""
 
+    def supabase_key_valid_for_python_client(self) -> bool:
+        """True if SUPABASE_KEY is in the form supabase-py accepts (JWT anon or service_role)."""
+        k = (self.SUPABASE_KEY or "").strip()
+        if not k or k == "mock":
+            return False
+        return bool(_SUPABASE_PY_KEY_PATTERN.match(k))
+
     @property
     def use_mock_db(self) -> bool:
-        """True when Supabase is not properly configured."""
-        return self.SUPABASE_URL in ("mock", "https://your-project.supabase.co", "")
+        """True when Supabase is not configured or the key cannot be used by supabase-py."""
+        if self.SUPABASE_URL in ("mock", "https://your-project.supabase.co", ""):
+            return True
+        if not self.supabase_key_valid_for_python_client():
+            return True
+        return False
+
+    @property
+    def supabase_configured_but_key_incompatible(self) -> bool:
+        """URL looks real but key is missing or not a JWT — explains mock fallback."""
+        if self.SUPABASE_URL in ("mock", "https://your-project.supabase.co", ""):
+            return False
+        return not self.supabase_key_valid_for_python_client()
 
     @property
     def use_mock_n8n(self) -> bool:

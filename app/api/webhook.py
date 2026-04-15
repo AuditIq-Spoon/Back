@@ -7,15 +7,14 @@ the RESULT event over the session's WebSocket.
 """
 from __future__ import annotations
 
-import asyncio
 import logging
 from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
+from ..core import data_service
 from ..core.security import verify_n8n_secret
-from ..core.database import get_supabase
 from ..models.schemas import RiskResult, SessionStatus
 from ..services.websocket_manager import manager as ws_manager
 
@@ -48,13 +47,7 @@ async def receive_n8n_result(payload: RiskResult) -> dict:
     }
 
     try:
-        supabase = get_supabase()
-        await asyncio.to_thread(
-            lambda: supabase.table("audit_sessions")
-            .update(update_data)
-            .eq("id", session_id)
-            .execute()
-        )
+        await data_service.update_session(session_id, update_data)
     except Exception as exc:
         logger.error("Failed to persist n8n result for session %s: %s", session_id, exc)
         raise HTTPException(

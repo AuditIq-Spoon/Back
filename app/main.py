@@ -104,6 +104,16 @@ async def health() -> dict:
 @app.on_event("startup")
 async def on_startup() -> None:
     logger.info("AuditIQ API started — version %s", settings.APP_VERSION)
+    if settings.supabase_configured_but_key_incompatible:
+        logger.warning(
+            "SUPABASE_URL is set but SUPABASE_KEY is not a JWT (anon / service_role). "
+            "The Python client does not accept publishable keys (sb_publishable_…). "
+            "Using in-memory mock DB until you set a JWT from Supabase → Project Settings → API."
+        )
+    elif not settings.use_mock_db:
+        logger.info("Supabase client enabled for %s", settings.SUPABASE_URL)
+    else:
+        logger.info("Using in-memory mock database (Supabase URL unset or placeholder).")
 
 
 @app.on_event("shutdown")
