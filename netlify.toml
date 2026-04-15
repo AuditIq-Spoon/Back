@@ -1,4 +1,4 @@
-# Netlify — API FastAPI via fonction Python (Mangum).
+# Netlify — FastAPI exposée par Mangum (ASGI → handler Lambda) dans netlify/functions/auditiq/auditiq.py
 # Si le site pointe vers un monorepo, définir « Base directory » = dossier Back dans l’UI Netlify.
 
 [build]
