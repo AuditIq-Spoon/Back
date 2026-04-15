@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import datetime
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
@@ -85,3 +86,24 @@ async def receive_n8n_result(payload: RiskResult) -> dict:
         payload.risk_score,
     )
     return {"status": "ok", "session_id": session_id}
+
+
+@router.post(
+    "/n8n-result-upload",
+    status_code=status.HTTP_200_OK,
+    summary="Receive n8n result for upload-triggered runs (does not update audit_sessions)",
+    dependencies=[Depends(verify_n8n_secret)],
+)
+async def receive_n8n_upload_result(payload: dict[str, Any]) -> dict:
+    """
+    When a file upload triggers the INOUT workflow with a synthetic session_id,
+    the workflow still POSTs a risk payload. This endpoint accepts it so n8n
+    succeeds without writing to `audit_sessions` (those IDs are not real sessions).
+    """
+    logger.info(
+        "n8n upload-triggered audit finished — session_id=%s risk_score=%s flags=%d",
+        payload.get("session_id"),
+        payload.get("risk_score"),
+        len(payload.get("anomalies") or []),
+    )
+    return {"status": "ok", "session_id": str(payload.get("session_id", ""))}

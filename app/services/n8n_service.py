@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import date
+from datetime import date, timedelta
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -158,9 +158,7 @@ async def trigger_document_upload(document_row: dict[str, Any]) -> None:
     txn = (document_row.get("transaction_date") or "").strip() or date.today().isoformat()
     # Use next calendar day for end_date so it satisfies INOUT "end after start" if workflow validates
     try:
-        from datetime import timedelta as td
-        end_d = date.fromisoformat(txn) + td(days=1)
-        end_s = end_d.isoformat()
+        end_s = (date.fromisoformat(txn) + timedelta(days=1)).isoformat()
     except ValueError:
         end_s = txn
 
