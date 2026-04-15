@@ -22,8 +22,8 @@ class Settings(BaseSettings):
     API_PREFIX: str = "/api"
     API_BASE_URL: str = "http://localhost:8000"
 
-    # CORS — comma-separated origins
-    CORS_ORIGINS: str = "http://localhost:4200"
+    # CORS — comma-separated origins (include Netlify SPA in production)
+    CORS_ORIGINS: str = "http://localhost:4200,https://auditiq-front.netlify.app"
 
     # Supabase (leave as "mock" to use the in-memory mock database)
     SUPABASE_URL: str = "mock"

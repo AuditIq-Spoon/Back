@@ -1,0 +1,10 @@
+.env
+.venv/
+.venv-win/
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+.pytest_cache/
+.mypy_cache/
+*.log
