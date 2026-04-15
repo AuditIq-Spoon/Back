@@ -14,6 +14,7 @@
   # Indispensable : sans cela, le zip Lambda ne contient que le fichier de la fonction → import app.* impossible
   included_files = ["app/**"]
 
+# Réécriture vers Mangum : le path vu par FastAPI est normalisé dans auditiq.py (préfixe fonction retiré).
 [[redirects]]
   from = "/*"
   to = "/.netlify/functions/auditiq"
