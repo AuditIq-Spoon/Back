@@ -81,6 +81,21 @@ app.include_router(websocket.router)   # WebSocket has no API prefix
 
 
 # ---------------------------------------------------------------------------
+# Root (utile quand l’API est servie via Netlify Functions + Mangum)
+# ---------------------------------------------------------------------------
+
+@app.get("/", tags=["root"], summary="Infos API (JSON)")
+async def root() -> dict:
+    return {
+        "service": settings.APP_NAME,
+        "version": settings.APP_VERSION,
+        "docs": "/docs",
+        "health": "/health",
+        "api": settings.API_PREFIX,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Health check
 # ---------------------------------------------------------------------------
 
