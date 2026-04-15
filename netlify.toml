@@ -1,17 +1,21 @@
-# Netlify defaults to a very new Python (e.g. 3.14) when unset. pydantic-core then
-# builds from source and requires Rust. Pin 3.12 so binary wheels install cleanly.
+# Netlify — API FastAPI via fonction Python (Mangum).
+# Si le site pointe vers un monorepo, définir « Base directory » = dossier Back dans l’UI Netlify.
+
 [build]
-  # Static root (fallback); API traffic is rewritten to the Python function below.
-  command = "echo Build OK"
+  # Installe les deps Python du projet avant le packaging des fonctions
+  command = "pip install -r requirements.txt"
   publish = "public"
-  functions = "netlify/functions"
 
 [build.environment]
   PYTHON_VERSION = "3.12"
 
-# Route all HTTP paths to the FastAPI app (Mangum handler in netlify/functions/server.py).
-# Netlify injects the original URL path into the Lambda-style event for Mangum.
+[functions]
+  directory = "netlify/functions"
+  # Indispensable : sans cela, le zip Lambda ne contient que le fichier de la fonction → import app.* impossible
+  included_files = ["app/**"]
+
 [[redirects]]
   from = "/*"
-  to = "/.netlify/functions/server"
+  to = "/.netlify/functions/auditiq"
   status = 200
+  force = true

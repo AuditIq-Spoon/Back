@@ -1,0 +1,2 @@
+# Réutilise les deps du backend (chemin relatif depuis ce dossier)
+-r ../../../requirements.txt
