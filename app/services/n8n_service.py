@@ -189,7 +189,7 @@ async def trigger_document_upload(document_row: dict[str, Any]) -> None:
         payload: dict[str, Any] = _json_safe(
             _build_payload(session_id, AuditType.INOUT, params, [doc_payload])
         )
-        payload["callback_url"] = f"{base_url}/api/webhook/n8n-result-upload"
+        payload["callback_url"] = f"https://auditiq-back.vercel.app/api/webhook/n8n-result-upload"
         # Echo back in n8n HTTP Request node body so the upload UI can poll by document_id
         payload["document_id"] = str(document_row.get("id", ""))
         fe = (settings.FRONTEND_PUBLIC_URL or "").strip().rstrip("/")
