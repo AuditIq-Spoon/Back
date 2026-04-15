@@ -89,14 +89,70 @@ async def receive_n8n_result(payload: RiskResult) -> dict:
 )
 async def receive_n8n_upload_result(payload: dict[str, Any]) -> dict:
     """
-    When a file upload triggers the INOUT workflow with a synthetic session_id,
-    the workflow still POSTs a risk payload. This endpoint accepts it so n8n
-    succeeds without writing to `audit_sessions` (those IDs are not real sessions).
+    When a file upload triggers the INOUT workflow (yhs1QhteOspEbuDN) with a synthetic
+    session_id, n8n POSTs here. We persist nothing to audit_sessions; we store a compact
+    result keyed by document_id so GET /api/upload/n8n-status/{id} can serve the SPA.
     """
+    from ..services.upload_n8n_result_store import record_result
+
+    doc_id = _extract_upload_document_id(payload)
+    anomalies_raw = payload.get("anomalies") or []
+    if not isinstance(anomalies_raw, list):
+        anomalies_raw = []
+    anomalies: list[dict[str, Any]] = []
+    for a in anomalies_raw:
+        if isinstance(a, dict):
+            anomalies.append(a)
+        elif hasattr(a, "model_dump"):
+            anomalies.append(a.model_dump())
+
+    try:
+        risk_score = int(payload.get("risk_score", 0))
+    except (TypeError, ValueError):
+        risk_score = 0
+    risk_summary = str(payload.get("risk_summary") or "").strip() or "No summary returned."
+
+    if doc_id:
+        record_result(
+            doc_id,
+            {
+                "status": "ready",
+                "document_id": doc_id,
+                "session_id": str(payload.get("session_id") or ""),
+                "risk_score": max(0, min(100, risk_score)),
+                "risk_summary": risk_summary,
+                "anomalies": anomalies,
+                "processing_metadata": payload.get("processing_metadata")
+                if isinstance(payload.get("processing_metadata"), dict)
+                else {},
+            },
+        )
+    else:
+        logger.warning(
+            "n8n upload callback missing document_id — add document_id to HTTP Request JSON "
+            "(payload includes document_id from webhook trigger). session_id=%s keys=%s",
+            payload.get("session_id"),
+            list(payload.keys()),
+        )
+
     logger.info(
-        "n8n upload-triggered audit finished — session_id=%s risk_score=%s flags=%d",
+        "n8n upload-triggered audit finished — document_id=%s session_id=%s risk_score=%s flags=%d",
+        doc_id,
         payload.get("session_id"),
-        payload.get("risk_score"),
-        len(payload.get("anomalies") or []),
+        risk_score,
+        len(anomalies),
     )
-    return {"status": "ok", "session_id": str(payload.get("session_id", ""))}
+    return {"status": "ok", "session_id": str(payload.get("session_id", "")), "document_id": doc_id or ""}
+
+
+def _extract_upload_document_id(payload: dict[str, Any]) -> str | None:
+    for key in ("document_id", "documentId"):
+        v = payload.get(key)
+        if v not in (None, "", []):
+            return str(v)
+    docs = payload.get("documents")
+    if isinstance(docs, list) and docs:
+        d0 = docs[0]
+        if isinstance(d0, dict) and d0.get("id"):
+            return str(d0["id"])
+    return None

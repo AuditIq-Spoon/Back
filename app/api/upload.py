@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import Annotated, Any, Optional
 from uuid import uuid4
 
@@ -15,6 +15,7 @@ from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, Uploa
 from ..core import data_service
 from ..models.schemas import DocumentType, DocumentUpload
 from ..services import n8n_service, ocr_service
+from ..services.upload_n8n_result_store import mark_pending
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/upload", tags=["documents"])
@@ -71,6 +72,21 @@ async def upload_documents(
         background_tasks.add_task(_safe_trigger_document_n8n, record)
 
     return uploads
+
+
+@router.get(
+    "/n8n-status/{document_id}",
+    summary="Poll n8n upload workflow result (yhs1QhteOspEbuDN callback stored server-side)",
+)
+async def upload_n8n_status(document_id: str) -> dict[str, Any]:
+    from ..services.upload_n8n_result_store import get_result
+
+    stored = get_result(document_id)
+    if not stored:
+        return {"status": "pending", "document_id": document_id}
+    if stored.get("status") == "ready" or "risk_score" in stored:
+        return {"status": "ready", "document_id": document_id, "result": stored}
+    return {"status": "pending", "document_id": document_id}
 
 
 async def _safe_trigger_document_n8n(record: dict[str, Any]) -> None:
@@ -153,16 +169,19 @@ async def _process_single_file(
             logger.warning("Unknown document_type override '%s', keeping inferred.", doc_type_override)
 
     txn_date = _transaction_date_from_extracted(doc_type, extracted_json)
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
+
+    safe_name = (file.filename or "").strip() or "unnamed"
+    safe_ct = (file.content_type or "").strip() or "application/octet-stream"
 
     record: dict[str, Any] = {
         "id": str(doc_id),
-        "filename": file.filename,
+        "filename": safe_name,
         "document_type": doc_type.value,
         "file_size_bytes": len(raw),
-        "content_type": file.content_type,
+        "content_type": safe_ct,
         "extracted_json": extracted_json,
-        "uploaded_at": now.isoformat(),
+        "uploaded_at": now.isoformat().replace("+00:00", "Z"),
         "transaction_date": txn_date,
     }
     if tender_id:
@@ -170,6 +189,7 @@ async def _process_single_file(
 
     try:
         await data_service.create_document(record)
+        mark_pending(str(doc_id))
     except Exception as exc:
         logger.error("DB insert failed for %s: %s", file.filename, exc)
         raise HTTPException(

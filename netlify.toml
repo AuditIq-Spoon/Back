@@ -1,10 +1,14 @@
-# Netlify — FastAPI exposée par Mangum (ASGI → handler Lambda) dans netlify/functions/auditiq/auditiq.py
-# Si le site pointe vers un monorepo, définir « Base directory » = dossier Back dans l’UI Netlify.
-
+# Netlify defaults to a very new Python (e.g. 3.14) when unset. pydantic-core then
+# builds from source and requires Rust. Pin 3.12 so binary wheels install cleanly.
+#
+# Important: Netlify is mainly static sites + serverless functions. It does NOT run
+# `uvicorn` as a daemon. For a normal FastAPI URL (uvicorn + WebSockets), use
+# Render, Railway, Fly.io, or Google Cloud Run instead — see backend/.env.example.
+#
+# If the repo root IS this backend folder, a typical Netlify *build* step is only:
 [build]
-  # Installe les deps Python du projet avant le packaging des fonctions
   command = "pip install -r requirements.txt"
-  publish = "public"
+  # Add `publish = "public"` and a minimal `public/index.html` if Netlify requires a publish dir.
 
 [build.environment]
   PYTHON_VERSION = "3.12"

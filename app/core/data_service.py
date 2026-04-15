@@ -8,12 +8,77 @@ switching to a real database requires changing only this file.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
+import math
 from typing import Any
 
 from .config import get_settings
 
 logger = logging.getLogger(__name__)
+
+def _sanitize_json_value(obj: Any) -> Any:
+    """Ensure values are JSON-compatible (Postgres JSONB rejects NaN / Infinity)."""
+    if isinstance(obj, float):
+        if math.isnan(obj) or math.isinf(obj):
+            return None
+        return obj
+    if isinstance(obj, dict):
+        return {str(k): _sanitize_json_value(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_sanitize_json_value(v) for v in obj]
+    return obj
+
+
+_ALLOWED_DOCUMENT_KEYS = frozenset(
+    {
+        "id",
+        "filename",
+        "document_type",
+        "file_size_bytes",
+        "content_type",
+        "extracted_json",
+        "uploaded_at",
+        "transaction_date",
+        "project_name",
+        "tender_id",
+    },
+)
+
+
+def _document_row_for_supabase(record: dict[str, Any]) -> dict[str, Any]:
+    """JSON-safe row with only columns that exist on public.documents."""
+    rec = dict(record)
+    if "extracted_json" in rec and isinstance(rec["extracted_json"], dict):
+        rec["extracted_json"] = _sanitize_json_value(rec["extracted_json"])
+    try:
+        safe = json.loads(json.dumps(rec, default=str, allow_nan=False))
+    except (TypeError, ValueError) as exc:
+        logger.warning("Document JSON round-trip failed, stripping non-finite floats: %s", exc)
+        rec["extracted_json"] = _sanitize_json_value(rec.get("extracted_json") or {})
+        safe = json.loads(json.dumps(rec, default=str, allow_nan=False))
+
+    row = {k: safe[k] for k in _ALLOWED_DOCUMENT_KEYS if k in safe}
+    fn = row.get("filename")
+    if not fn or not str(fn).strip():
+        row["filename"] = "unnamed"
+    ct = row.get("content_type")
+    if not ct or not str(ct).strip():
+        row["content_type"] = "application/octet-stream"
+
+    ej = row.get("extracted_json")
+    if isinstance(ej, str):
+        row["extracted_json"] = json.loads(ej)
+    elif ej is None:
+        row["extracted_json"] = {}
+    if row.get("tender_id") in ("", None):
+        row.pop("tender_id", None)
+    return row
+
+
+def _insert_document_row(sb: Any, insert_row: dict[str, Any]) -> Any:
+    """Sync helper for asyncio.to_thread (avoids closure pitfalls)."""
+    return sb.table("documents").insert(insert_row).execute()
 
 
 # ---------------------------------------------------------------------------
@@ -79,9 +144,20 @@ async def create_document(record: dict) -> dict:
         from . import mock_db
         return mock_db.create_document(record)
     sb = _sb()
-    resp = await asyncio.to_thread(
-        lambda: sb.table("documents").insert(record).execute()
-    )
+    row = _document_row_for_supabase(record)
+    try:
+        resp = await asyncio.to_thread(_insert_document_row, sb, row)
+    except Exception as exc:
+        logger.exception(
+            "Supabase documents.insert failed id=%s filename=%s: %s",
+            row.get("id"),
+            row.get("filename"),
+            exc,
+        )
+        raise
+    if not resp.data:
+        logger.error("Supabase insert returned empty data for document id=%s", row.get("id"))
+        raise RuntimeError("Supabase insert returned no row")
     return resp.data[0]
 
 

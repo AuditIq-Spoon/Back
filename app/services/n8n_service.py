@@ -180,6 +180,11 @@ async def trigger_document_upload(document_row: dict[str, Any]) -> None:
             _build_payload(session_id, AuditType.INOUT, params, [doc_payload])
         )
         payload["callback_url"] = f"{base_url}/api/webhook/n8n-result-upload"
+        # Echo back in n8n HTTP Request node body so the upload UI can poll by document_id
+        payload["document_id"] = str(document_row.get("id", ""))
+        fe = (settings.FRONTEND_PUBLIC_URL or "").strip().rstrip("/")
+        if fe:
+            payload["frontend_upload_page_url"] = f"{fe}/upload"
     except (TypeError, ValueError) as exc:
         logger.exception(
             "Document n8n payload could not be built for %s: %s",
